@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -430,6 +431,40 @@ func main() {
 	if err := analyzer.Run(); err != nil {
 		log.Fatalf("Audio analysis failed: %v", err)
 	}
+
+	outputFile := "./output/text/transcription_results.txt"
+	entries, err := os.ReadDir("./output")
+	if err != nil {
+		fmt.Println("ディレクトリの読み取りに失敗しました:", err)
+		return
+	}
+
+	var textFiles []os.DirEntry
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txt") {
+			textFiles = append(textFiles, entry)
+		}
+	}
+
+	var combined strings.Builder
+
+	for _, entry := range textFiles {
+		path := filepath.Join("./output", entry.Name())
+
+		content, err := ioutil.ReadFile(path)
+		if err != nil {
+			fmt.Printf("Failed to read file %s: %v\n", path, err)
+			continue
+		}
+		combined.Write((content))
+		combined.WriteString("\n\n")
+	}
+	err = ioutil.WriteFile(outputFile, []byte(combined.String()), 0644)
+	if err != nil {
+		fmt.Println("書き込みエラー:", err)
+		return
+	}
+	fmt.Println("結合完了:", outputFile)
 }
 
 func GetAudioDuration(filePath string) (float64, error) {
