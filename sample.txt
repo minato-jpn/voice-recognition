@@ -1,8 +1,0 @@
-./whisper.cpp/build/bin/Release/whisper-cli.exe -m ./whisper.cpp/models/ggml-large-v3.bin -f ./output/segment_000_0.0-59.5.wav -l ja --vad-min-speech-duration-ms 60000 -otxt -tdrz -sns  -t 14 -p 1 --suppress-nst --prompt 
-
-"この音声は大学のサークル活動に関する会話です。
-内容には「理科大（りかだい）」または「理大（りだい）」という大学名が登場します。
-また、「理大祭（りだいさい）」というイベント名が含まれる場合があります。
-会話は自然な日本語で行われており、学生同士のカジュアルなやり取りが含まれます。
-固有名詞（大学名・イベント名など）は正確に認識してください。
-日本語の音声の認識を行います"

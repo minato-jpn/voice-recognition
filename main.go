@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -45,9 +46,7 @@ type AudioAnalyzer struct {
 func NewAudioAnalyzer(inputFile, outputDir string) *AudioAnalyzer {
 	// CPUコア数を取得し、最適なワーカー数を設定
 	numCPU := runtime.NumCPU()
-	maxWorkers := 1
-
-	// 1コアはシステム用に残す
+	maxWorkers := 1 // 1コアはシステム用に残す
 	if maxWorkers < 3 {
 		maxWorkers = 1
 	}
@@ -60,8 +59,8 @@ func NewAudioAnalyzer(inputFile, outputDir string) *AudioAnalyzer {
 		MaxWorkers:         maxWorkers,
 		SilenceThreshold:   "-30dB",
 		SilenceDuration:    "5",
-		MinSegmentDuration: 30.0,
-		MaxSegmentDuration: 60.0,
+		MinSegmentDuration: 0,
+		MaxSegmentDuration: 5.0,
 	}
 }
 
@@ -238,8 +237,10 @@ func (a *AudioAnalyzer) extractSingleSegment(segment AudioSegment) error {
 		"-i", a.InputFile,
 		"-ss", fmt.Sprintf("%.3f", segment.StartTime),
 		"-t", fmt.Sprintf("%.3f", segment.Duration),
-		"-c", "copy",
-		"-y", // overwrite output file
+		"-ac", "1", // モノラル
+		"-ar", "16000", // 16kHz
+		"-c:a", "pcm_s16le", // PCM 16bit little-endian
+		"-y", // 上書き
 		segment.FilePath)
 
 	if err := cmd.Run(); err != nil {
@@ -308,7 +309,7 @@ func (a *AudioAnalyzer) transcribeCpp(segment AudioSegment) (string, error) {
 					固有名詞（大学名・イベント名など）は正確に認識してください。
 					日本語の音声の認識を行います`
 
-	cmd := exec.Command("./whisper.cpp/build/bin/Release/whisper-cli.exe", "-m", "./whisper.cpp/models/ggml-large-v3.bin", "-f", "./"+strings.ReplaceAll(filepath, "\\", "/"), "-l", "ja", "--vad-min-speech-duration-ms", secondsStr, "-otxt", "-tdrz", "-sns", "--suppress-nst", "--prompt", initialPrompt)
+	cmd := exec.Command("./whisper.cpp/build/bin/Release/whisper-cli.exe", "-m", "./whisper.cpp/models/ggml-large-v3.bin", "-f", "./"+strings.ReplaceAll(filepath, "\\", "/"), "-l", "ja", "--vad-min-speech-duration-ms", secondsStr, "-otxt", "-tdrz", "-sns", "--suppress-nst", "--prompt", initialPrompt, "-of", "./output/text/"+strings.TrimPrefix(strings.TrimSuffix(filepath, ".wav"), "output\\"))
 	output, err := cmd.CombinedOutput()
 	fmt.Printf("C++ whisper output: %s\n", string(output))
 	if err != nil {
@@ -367,7 +368,33 @@ func (a *AudioAnalyzer) OutputResults(results []TranscriptionResult) error {
 	}
 
 	// テキスト出力
-	txtFile := filepath.Join(a.OutputDir, "transcription_results.txt")
+	txtFile, err := os.Create(filepath.Join("./output/transcription_results.txt"))
+	if err != nil {
+		return fmt.Errorf("failed to create text file: %v", err)
+	}
+	defer txtFile.Close()
+
+	// フォルダ内の .txt ファイルをすべて処理
+	err = filepath.WalkDir("./output/text", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".txt") {
+			base := strings.TrimSuffix(d.Name(), ".txt")
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			// セクションタイトルと中身を追加
+			txtFile.WriteString(fmt.Sprintf("[%s]\n", base))
+			txtFile.Write(content)
+			txtFile.WriteString("\n\n")
+		}
+		return nil
+	})
+
 	var textBuilder strings.Builder
 	textBuilder.WriteString("\uFEFF") // UTF-8 BOM
 	for _, result := range results {
@@ -380,21 +407,10 @@ func (a *AudioAnalyzer) OutputResults(results []TranscriptionResult) error {
 		}
 	}
 
-	if err := os.WriteFile(txtFile, []byte(textBuilder.String()), 0644); err != nil {
+	_, err = txtFile.WriteString(textBuilder.String())
+	if err != nil {
 		return fmt.Errorf("failed to write text file: %v", err)
 	}
-
-	// コンソール出力
-	fmt.Println("\n=== Transcription Results ===")
-	for _, result := range results {
-		if result.Error != "" {
-			fmt.Printf("[%.1fs-%.1fs] ERROR: %s\n",
-				result.Segment.StartTime, result.Segment.EndTime, result.Error)
-		} else {
-			fmt.Printf(result.Text)
-		}
-	}
-
 	return nil
 }
 
