@@ -45,7 +45,9 @@ type AudioAnalyzer struct {
 func NewAudioAnalyzer(inputFile, outputDir string) *AudioAnalyzer {
 	// CPUコア数を取得し、最適なワーカー数を設定
 	numCPU := runtime.NumCPU()
-	maxWorkers := numCPU / 2 // 1コアはシステム用に残す
+	maxWorkers := 1
+
+	// 1コアはシステム用に残す
 	if maxWorkers < 3 {
 		maxWorkers = 1
 	}
@@ -292,12 +294,6 @@ func (a *AudioAnalyzer) transcribeCpp(segment AudioSegment) (string, error) {
 	exePath := "./whisper.cpp/build/bin/Release/main.exe"
 	if _, err := os.Stat(exePath); os.IsNotExist(err) {
 		log.Fatal("main.exe が見つかりません")
-	}
-
-	// モデルファイルの存在確認
-	modelPath := "./whisper.cpp/models/ggml-base.bin"
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		log.Fatal("モデルファイルが見つかりません")
 	}
 
 	seconds, err := GetAudioDuration(filepath)
