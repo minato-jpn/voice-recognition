@@ -59,9 +59,9 @@ func NewAudioAnalyzer(inputFile, outputDir string) *AudioAnalyzer {
 		OutputDir:          outputDir,
 		MaxWorkers:         maxWorkers,
 		SilenceThreshold:   "-30dB",
-		SilenceDuration:    "5",
-		MinSegmentDuration: 0,
-		MaxSegmentDuration: 5.0,
+		SilenceDuration:    "1",
+		MinSegmentDuration: 10.0,
+		MaxSegmentDuration: 30.0,
 	}
 }
 
@@ -308,9 +308,10 @@ func (a *AudioAnalyzer) transcribeCpp(segment AudioSegment) (string, error) {
 					また、「理大祭（りだいさい）」というイベント名が含まれる場合があります。
 					会話は自然な日本語で行われており、学生同士のカジュアルなやり取りが含まれます。
 					固有名詞（大学名・イベント名など）は正確に認識してください。
-					日本語の音声の認識を行います`
-
-	cmd := exec.Command("./whisper.cpp/build/bin/Release/whisper-cli.exe", "-m", "./whisper.cpp/models/ggml-large-v3.bin", "-f", "./"+strings.ReplaceAll(filepath, "\\", "/"), "-l", "ja", "--vad-min-speech-duration-ms", secondsStr, "-otxt", "-tdrz", "-sns", "--suppress-nst", "--prompt", initialPrompt, "-of", "./output/text/"+strings.TrimPrefix(strings.TrimSuffix(filepath, ".wav"), "output\\"))
+					日本語の音声の認識日本語で返答してください`
+	// fmt.Println("file location: ", "./"+strings.ReplaceAll(filepath, "\\", "/"))
+	// fmt.Println("output location: ", "./output/text/"+strings.TrimPrefix(strings.TrimSuffix(filepath, ".wav"), "output\\sound_data\\"))
+	cmd := exec.Command("./whisper.cpp/build/bin/Release/whisper-cli.exe", "-m", "./whisper.cpp/models/ggml-large-v3.bin", "-f", "./"+strings.ReplaceAll(filepath, "\\", "/"), "-l", "ja", "--vad-min-speech-duration-ms", secondsStr, "-otxt", "-tdrz", "-sns", "--suppress-nst", "--prompt", initialPrompt, "-of", "./output/text/"+strings.TrimPrefix(strings.TrimSuffix(filepath, ".wav"), "output\\sound_data\\"))
 	output, err := cmd.CombinedOutput()
 	fmt.Printf("C++ whisper output: %s\n", string(output))
 	if err != nil {
@@ -433,7 +434,7 @@ func main() {
 	}
 
 	outputFile := "./output/text/transcription_results.txt"
-	entries, err := os.ReadDir("./output")
+	entries, err := os.ReadDir("./output/text")
 	if err != nil {
 		fmt.Println("ディレクトリの読み取りに失敗しました:", err)
 		return
@@ -449,7 +450,7 @@ func main() {
 	var combined strings.Builder
 
 	for _, entry := range textFiles {
-		path := filepath.Join("./output", entry.Name())
+		path := filepath.Join("./output/text", entry.Name())
 
 		content, err := ioutil.ReadFile(path)
 		if err != nil {
